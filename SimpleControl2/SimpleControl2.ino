@@ -21,7 +21,7 @@ byte speedByte[5];
 
 byte forward = 1;
 byte backwards = 0;
-byte directionByte = 1;
+byte directionByte = 0;
 
 int aPin = 10;
 
@@ -37,7 +37,8 @@ void buildDataByte(byte dir, byte * v)
     {
         data[3+i] = *(v + i);
     }
-    buildPacket(trainAddress, data);
+//  Serial.println("Databyte build");
+    buildPacket(greenOneAddress, data);
 }
 
 void buildPacket(byte * address, byte * data)
@@ -84,11 +85,13 @@ void buildPacket(byte * address, byte * data)
   packet[count] = 1;
   count++;
 
+//  Serial.println("PacketBuild");
   sendPacket(packet);
 }
 
 void sendPacket(byte * packet)
 {
+
     for(int i = 0; i < 41; i++)
   {
     int j = packet[i];
@@ -98,6 +101,7 @@ void sendPacket(byte * packet)
       delayMicroseconds(58);
       digitalWrite(aPin, LOW);
       delayMicroseconds(58);
+//      Serial.print("1,");
     }
     else
     {
@@ -105,29 +109,74 @@ void sendPacket(byte * packet)
       delayMicroseconds(116);
       digitalWrite(aPin, LOW);
       delayMicroseconds(116);
+//      Serial.print("0,");
     }
   }
+//  Serial.println("packet sent");
 }
 
 void parseInput(char * input)
-{
-  directionByte = *(input);
-  speedByte[0] = *(input + 2);
-  speedByte[1] = *(input + 3);
+{  
+  directionByte = input[0];
+
+  char speedInput[2];
+  speedInput[0] = *(input + 2);
+  speedInput[1] = *(input + 3);
+
+  String speedIn = String(speedInput);
+  int speedInt = speedIn.toInt();
+
+  switch(speedInt)
+  {
+    case 0:
+      buildSpeedByte(vStop);
+      break;
+    case 1:
+      buildSpeedByte(vStep1);
+      break;
+     case 5:
+      buildSpeedByte(vStep5);
+      break;
+     case 10:
+      buildSpeedByte(vStep10);
+      break;
+     case 15:
+      buildSpeedByte(vStep15);
+      break;
+     case 20:
+      buildSpeedByte(vStep20);
+      break;
+     case 28:
+      buildSpeedByte(vStep28);
+      break;
+     default:
+      buildSpeedByte(vStop);
+      break;
+  }
+  
   if(*(input + 5) == '1')
   {
-    trainAddress = &greenOneAddress[0];
+    trainAddress = &greenOneAddress[0]; //Doesn't work
   }
   buildDataByte(directionByte, speedByte);
+}
+
+void buildSpeedByte(byte * vByte)
+{
+  for(int i = 0; i < 5; i++)
+  {
+    speedByte[i] = *(vByte +i);
+  }
 }
 
 void setup() 
 {
   pinMode(aPin, OUTPUT);
   Serial.begin(9600);
-  buildDataByte(backwards, vStep10);
-  buildPacket(trainAddress, dataByte);
-  sendPacket(fullPacket);
+//  buildDataByte(backwards, vStep20);
+//  buildPacket(trainAddress, dataByte);
+//  sendPacket(fullPacket);
+  Serial.println("Setup");
 }
 
 void loop() 

@@ -85,7 +85,7 @@ void setup()
 {
   pinMode(aPin, OUTPUT);
   Serial.begin(9600);
-  dataByte = buildDataByte(backwards, vStep10);
+  dataByte = buildDataByte(forward, vStep15);
   fullPacket = buildPacket(trainAddress, dataByte);
 }
 
