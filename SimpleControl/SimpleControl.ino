@@ -18,7 +18,7 @@ byte vStep28[5] = {1,1,1,1,1};
 byte forward = 1;
 byte backwards = 0;
 
-int aPin = 10;
+int aPin = 4;
 
 
 byte * buildDataByte(byte dir, byte * v)

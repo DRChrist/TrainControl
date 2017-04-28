@@ -14,16 +14,17 @@ unsigned char every_second_isr = 0;  // pulse up or down
 #define SEPARATOR 1
 #define SENDBYTE  2
 
-unsigned char state= PREAMBLE;
+unsigned char state = PREAMBLE;
 unsigned char preamble_count = 16;
 unsigned char outbyte = 0;
 unsigned char cbit = 0x80;
 
 // variables for throttle
 int locoSpeed = 116; //hex 74
+int dirSpeedByte = 79;
 int dir = 1; //forward
 //int locoAdr = 36; //this is the (fixed) address of the locomotive
-unsigned char locoAdr = 36;
+unsigned char locoAdr = 36; //don't know if this works
 int jkp = 0;
 // buffer for command
 struct Message
@@ -41,6 +42,7 @@ struct Message msg[MAXMSG] =
   { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3},  //idle msg
   { {locoAdr, 0, 0, 0, 0, 0, 0}, 3}   //locoMsg with 128 speed steps
 };        // loco msg must be filled later with speed an XOR data byte
+
 
 int msgIndex = 0;
 int byteIndex = 0;
@@ -108,7 +110,7 @@ ISR(TIMER2_OVF_vect)
           msgIndex++;
           if(msgIndex >= MAXMSG)
           {
-            msgIndex = 0;
+            msgIndex = 1;
           }
           byteIndex = 0; //start msg with byte 0
         }
@@ -118,9 +120,9 @@ ISR(TIMER2_OVF_vect)
         //then advance to next state
         state = SENDBYTE;
         // goto next byte
-        jkp = 2;
+        jkp = 2;                                             
         cbit = 0x80; // send this bit next time first. 0x80 == ( 1 0 0 0 0 0 0 0 )
-        outbyte = msg[msgIndex].data[byteIndex];
+        outbyte = msg[msgIndex].data[byteIndex];                 
         break;
       case SENDBYTE:
         if(outbyte & cbit) //separate the bit cbit is at, and if it is a 1 (non-zero), this is true and it sends a 1 (a short pulse)
@@ -165,7 +167,7 @@ ISR(TIMER2_OVF_vect)
       latency = TCNT2;
       TCNT2 = latency + TIMER_LONG;
       last_timer = TIMER_LONG;
-      Serial.print('0');
+      Serial.print('0'); 
     }
     if(jkp == 1)
     {
@@ -183,8 +185,8 @@ ISR(TIMER2_OVF_vect)
 void assemble_dcc_msg()
 {
   unsigned char data, checksum;
-  data = locoSpeed;
-
+  data = dirSpeedByte;
+  
   checksum = msg[1].data[0] ^ data;
   noInterrupts(); //make sure that only matching parts of the message are used in ISR
   msg[1].data[1] = data;
@@ -202,11 +204,18 @@ void setup()
   //Start the timer
   SetupTimer2();
 }
+char inputBuffer[6];
 
 void loop() 
 {
   delay(200);
+  while(Serial.available() > 0)
+  {
+    String input = Serial.readString();
+    dirSpeedByte = input.toInt();
+  }
   assemble_dcc_msg();
+ 
 }
 
 

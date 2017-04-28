@@ -23,7 +23,7 @@ byte forward = 1;
 byte backwards = 0;
 byte directionByte = 0;
 
-int aPin = 10;
+int aPin = 4;
 
 char inputBuffer[6];
 
