@@ -123,6 +123,7 @@ ISR(TIMER2_OVF_vect)
           if(oneTimeMsgReady)
           {
             msgIndex = 0;
+            oneTimeMsgReady = 0; //Reset variable to only send message once. Should it be sent twice?
           }
           byteIndex = 0; //start msg with byte 0
         }
