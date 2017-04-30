@@ -23,7 +23,7 @@ unsigned char vStep15 = 9;
 unsigned char vStep19 = 11; 
 unsigned char vStep27 = 15; 
 
-char inputBuffer[8];
+char inputBuffer[13];
 unsigned char state = PREAMBLE;
 unsigned char preamble_count = 16;
 unsigned char outbyte = 0;
@@ -236,16 +236,16 @@ void parseInput(char * input)
      case 5:
       buildSpeedByte(vStep5);
       break;
-     case 10:
+     case 9:
       buildSpeedByte(vStep9);
       break;
      case 15:
       buildSpeedByte(vStep15);
       break;
-     case 20:
+     case 19:
       buildSpeedByte(vStep19);
       break;
-     case 28:
+     case 27:
       buildSpeedByte(vStep27);
       break;
      default:
@@ -290,6 +290,24 @@ void configureCV29()
   oneTimeMsgReady = 1;
 }
 
+void buildAnyMessage(char * input)
+{
+  int j = 0;
+  for(int i = 0; i < msg[0].len; i++)
+  {
+    char byteToBuild[3];
+    byteToBuild[0] = input[j + 2];
+    byteToBuild[1] = input[j + 3];
+    byteToBuild[2] = input[j + 4];
+    String sByteToBuild = String(byteToBuild);
+    int iByteToBuild = sByteToBuild.toInt();
+    msg[0].data[i] = iByteToBuild;
+    j = j + 2;
+  }
+
+  oneTimeMsgReady = 1;
+}
+
 void setup() 
 {
   Serial.begin(115200);
@@ -306,9 +324,10 @@ void loop()
   delay(200);
   while(Serial.available() > 0)
   {
-    String input = Serial.readString(); //accepts input in this pattern: {d ss t} - d is direction, 1 forward, 0 for backwards
+    String input = Serial.readString(); //accepts input in this pattern: {d ss t} - d is direction, 1 forward, 0 for backwards (d = 9 changes CV#29, d = 8 allows sending any message)
     if(flChange.equals(input)) configureCV29();
     input.toCharArray(inputBuffer, sizeof(inputBuffer));    //ss is to numbers for speed, refer to list of vSteps above
+    if(inputBuffer[0] == '8') buildAnyMessage(inputBuffer); //for sending non-standard messages. Protocol: {8 111 222 333} 111, 222 and 333 must occupy the spaces, so 2 = 002;
     parseInput(inputBuffer);                                //t is trainAddress. 1 is the green one.
   }
   assemble_dcc_msg();
