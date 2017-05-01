@@ -8,7 +8,7 @@ unsigned char last_timer=TIMER_SHORT;  // store last timer value
    
 unsigned char flag = 0;  // used for short or long pulse
 unsigned char every_second_isr = 0;  // pulse up or down
-unsigned char oneTimeMsgReady = 0;
+int oneTimeMsgReady = 0;
 
 // definitions for state machine 
 #define PREAMBLE 0    
@@ -31,6 +31,7 @@ unsigned char cbit = 0x80;
 String flChange = "flchange";
 
 unsigned char greenOneAddress = 36; //this is the (fixed) address of the locomotive
+unsigned char redOneAddress = 40;
 
 unsigned char trainAddress;
 unsigned char dirSpeedByte = 79;
@@ -120,10 +121,11 @@ ISR(TIMER2_OVF_vect)
         { //advance to next state
           state = SEPARATOR;
           //get next message
-          if(oneTimeMsgReady)
+          if(oneTimeMsgReady) //doesn't work
           {
             msgIndex = 0;
             oneTimeMsgReady = 0; //Reset variable to only send message once. Should it be sent twice?
+            Serial.println("one time msg sent");
           }
           byteIndex = 0; //start msg with byte 0
         }
@@ -158,7 +160,10 @@ ISR(TIMER2_OVF_vect)
             state = PREAMBLE;
             preamble_count = 16;
             jkp = 1;
-            if(msgIndex == 0) msgIndex++;
+            if(msgIndex == 0) 
+            {
+              msgIndex++;
+            }
           }
           else
           {
@@ -174,23 +179,23 @@ ISR(TIMER2_OVF_vect)
       latency = TCNT2;
       TCNT2 = latency + TIMER_SHORT;
       last_timer = TIMER_SHORT;
-      Serial.print('1');
+      //Serial.print('1');
     }
     else
     { // long pulse
       latency = TCNT2;
       TCNT2 = latency + TIMER_LONG;
       last_timer = TIMER_LONG;
-      Serial.print('0'); 
+      //Serial.print('0'); 
     }
     if(jkp == 1)
     {
-      Serial.println();
+      //Serial.println();
       jkp = 0;
     }
     if(jkp == 2)
     {
-      Serial.print(" ");
+      //Serial.print(" ");
       jkp = 0;
     }
   }
@@ -210,13 +215,16 @@ void assemble_dcc_msg()
 
 void parseInput(char * input)
 {  
-  if(input[0] == 9)
+  if(input[0] == '9')
   {
     dirSpeedByte = 1; //emergency brake
     setAddress(*(input + 2));
+    Serial.print("EMERGENCY!");
+    assemble_dcc_msg();
+    return;
   }
-  
-  dir = input[0];
+
+  dir = input[0] - '0';
 
   char speedInput[2];
   speedInput[0] = *(input + 2);
@@ -252,9 +260,11 @@ void parseInput(char * input)
       buildSpeedByte(vStop);
       break;
   }
-  if(*(input + 7) == 'f') headLight = 16; //because we add it directly to dirSpeedByte in buildSpeedByte
+  //if(*(input + 7) == 'f') headLight = 16; //because we add it directly to dirSpeedByte in buildSpeedByte
   
   setAddress(*(input + 5));
+
+  assemble_dcc_msg();
 }
 
 void setAddress(unsigned char adr)
@@ -266,6 +276,10 @@ void setAddress(unsigned char adr)
   if(adr == '0')
   {
     trainAddress = 0; //for resetting and clearing train memory, and for general broadcast
+  }
+  if(adr == '2')
+  {
+    trainAddress = redOneAddress;
   }
 }
 
@@ -280,14 +294,22 @@ void buildSpeedByte(unsigned char vel)
   {
     dirSpeedByte = vel + 64 + headLight;
   }
+
 }
 
-void configureCV29()
+void configureCV29() //does'nt work. Need to start with an address byte and end with a checksum
 {
-  msg[0].data[0] = 232;
-  msg[0].data[1] = 28;
-  msg[0].data[2] = 249;
+  noInterrupts();
+  Serial.println("configurecv29");
+  msg[0].data[0] = 36;
+  msg[0].data[1] = 232;
+  msg[0].data[2] = 28;
+  msg[0].data[3] = 241;
+  msg[0].data[4] = msg[0].data[0] ^ msg[0].data[1] ^ msg[0].data[2] ^ msg[0].data[3]; //might not work
+  msg[0].len = 5;
+  headLight = 16;
   oneTimeMsgReady = 1;
+  interrupts();
 }
 
 void buildAnyMessage(char * input)
@@ -325,12 +347,18 @@ void loop()
   while(Serial.available() > 0)
   {
     String input = Serial.readString(); //accepts input in this pattern: {d ss t} - d is direction, 1 forward, 0 for backwards (d = 9 changes CV#29, d = 8 allows sending any message)
-    if(flChange.equals(input)) configureCV29();
     input.toCharArray(inputBuffer, sizeof(inputBuffer));    //ss is to numbers for speed, refer to list of vSteps above
-    if(inputBuffer[0] == '8') buildAnyMessage(inputBuffer); //for sending non-standard messages. Protocol: {8 111 222 333} 111, 222 and 333 must occupy the spaces, so 2 = 002;
+    if(inputBuffer[0] == 'f')
+    {
+      configureCV29();
+    }
+    if(inputBuffer[0] == '8')
+    {
+      buildAnyMessage(inputBuffer); //for sending non-standard messages. Protocol: {8 111 222 333} 111, 222 and 333 must occupy the spaces, so 2 = 002;
+    }
     parseInput(inputBuffer);                                //t is trainAddress. 1 is the green one.
   }
-  assemble_dcc_msg();
+  //assemble_dcc_msg();
  
 }
 
