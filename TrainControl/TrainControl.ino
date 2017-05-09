@@ -9,8 +9,6 @@ unsigned char last_timer = TIMER_SHORT;  // store last timer value
 unsigned char flag = 0;  // used for short or long pulse
 unsigned char every_second_isr = 0;  // pulse up or down
 unsigned char oneTimeMsgReady = 0; //used for sending utility messages and messages for lights and switches. Might not work.
-unsigned char newMessage = 1; //used for printing only new messages
-unsigned char newStandardMessage = 0;
 
 // definitions for state machine
 #define PREAMBLE 0
@@ -19,8 +17,11 @@ unsigned char newStandardMessage = 0;
 
 unsigned char vStop = 0;
 unsigned char vStep1 = 2;
-unsigned char vStep5 = 4;
-unsigned char vStep9 = 6;
+unsigned char vStep2 = 3;
+unsigned char vStep3 = 4;
+unsigned char vStep4 = 5;
+unsigned char vStep5 = 6;
+unsigned char vStep6 = 7;
 unsigned char vStep15 = 9;
 unsigned char vStep19 = 11;
 unsigned char vStep27 = 15;
@@ -68,7 +69,7 @@ unsigned char yellowOneAddress = 8;
 
 unsigned char trainAddress = 8;
 unsigned char dirSpeedByte = 0;
-int dir = 1; //forward
+unsigned char dir = 1; //forward
 
 unsigned char lightByteOne = 0;
 unsigned char lightByteTwo = 0;
@@ -160,13 +161,7 @@ ISR(TIMER2_OVF_vect)
         {
           msgIndex = 0;
           oneTimeMsgReady = 0; //Reset variable to only send message once. Should it be sent twice?
-//          newMessage = 1;
-//          Serial.print("one time msg sent");
         }
-//        if(newStandardMessage)
-//        {
-//          newMessage = 1;
-//        }
         byteIndex = 0; //start msg with byte 0
       }
       break;
@@ -191,7 +186,6 @@ ISR(TIMER2_OVF_vect)
       cbit = cbit >> 1; //move cbit one to the right, to iterate through the byte, sending one bit at a time
       if(cbit == 0)
       { //last bit sent, is there a next byte?
-        //Serial.print(" ");
         byteIndex++;
         jkp = 2;
         if(byteIndex >= msg[msgIndex].len)
@@ -219,28 +213,30 @@ ISR(TIMER2_OVF_vect)
       latency = TCNT2;
       TCNT2 = latency + TIMER_SHORT;
       last_timer = TIMER_SHORT;
-//      if(newMessage) Serial.print('1');
     }
     else
     { // long pulse
       latency = TCNT2;
       TCNT2 = latency + TIMER_LONG;
       last_timer = TIMER_LONG;
-//      if(newMessage) Serial.print('0');
     }
-//    if(jkp == 1 )//&& newMessage)
-//    {
-//      Serial.println();
-//      jkp = 0;
-////      newMessage = 0;
-////      newStandardMessage = 0;
-//    }
-//    if(jkp == 2 )//&& newMessage)
-//    {
-//      Serial.print(" ");
-//      jkp = 0;
-//    }
   }
+}
+
+void sendOneTimeMessage()
+{
+  oneTimeMsgReady = 1;
+  printMessage(msg[0]);
+}
+
+void printMessage(Message msg)
+{
+  for(int i = 0; i < msg.len; i++)
+  {
+    Serial.print(msg.data[i]);
+    Serial.print(" ");
+  }
+  Serial.println();
 }
 
 void assemble_dcc_msg()
@@ -253,8 +249,8 @@ void assemble_dcc_msg()
   msg[1].data[0] = trainAddress;
   msg[1].data[1] = data;
   msg[1].data[2] = checksum;
-  newStandardMessage = 1;
   interrupts();
+  printMessage(msg[1]);
 }
 
 
@@ -314,31 +310,16 @@ void setLightBytes(int address, char colour)
   }
 }
 
-
-void buildSpeedByte(unsigned char vel)
-{
-  //takes five bits for the velocity and adds 0 1 and the direction
-  if(dir)
-  {
-    dirSpeedByte = vel + 96;
-  }
-  else
-  {
-    dirSpeedByte = vel + 64;
-  }
-
-}
-
 int getAddress(unsigned char adr)
 {
   if(adr == '1')
   {
     return greenOneAddress;
   }
-  else if(adr == '0')
-  {
-    return 0; //for resetting and clearing train memory, and for general broadcast
-  }
+//  else if(adr == '0')//might send to every decoder on the track, which might be risky
+//  {
+//    return 0; //for resetting and clearing train memory, and for general broadcast
+//  }
   else if(adr == '2')
   {
     return redOneAddress;
@@ -349,60 +330,50 @@ int getAddress(unsigned char adr)
   }
   else
   {
-    return greenOneAddress; //to be changed later. Don't know what to set as default
+    return 255; //to be changed later. Don't know what to set as default
   }
   
 }
 
 void parseInput(char * input)
 {
+  int speedInt;
+  
   if(input[0] == '9')
   {
-    dirSpeedByte = 1; //emergency brake
+    dirSpeedByte = 1 + 64; //emergency brake
     trainAddress = getAddress(*(input + 2));
-    Serial.print("EMERGENCY!");
     assemble_dcc_msg();
     return;
   }
 
-  dir = input[0] - '0';
-
-  char speedInput[2];
-  speedInput[0] = *(input + 2);
-  speedInput[1] = *(input + 3);
-
-  String speedIn = String(speedInput);
-  int speedInt = speedIn.toInt();
-
-  switch(speedInt)
+  dir = input[0]; //changed dir from int to unsigned char.
+  
+  if(input[3] == ' ')//if there is only one digit in speed input
   {
-    case 0:
-    buildSpeedByte(vStop);
-    break;
-    case 1:
-    buildSpeedByte(vStep1);
-    break;
-    case 5:
-    buildSpeedByte(vStep5);
-    break;
-    case 9:
-    buildSpeedByte(vStep9);
-    break;
-    case 15:
-    buildSpeedByte(vStep15);
-    break;
-    case 19:
-    buildSpeedByte(vStep19);
-    break;
-    case 27:
-    buildSpeedByte(vStep27);
-    break;
-    default:
-    buildSpeedByte(vStop);
-    break;
+    speedInt = input[2] - '0' + 1;  
+    trainAddress = getAddress(*(input + 4));
   }
-  trainAddress = getAddress(*(input + 4));
+  else//if there are two digits in speed input
+  {
+    char speedInput[2];
+    speedInput[0] = *(input + 2);
+    speedInput[1] = *(input + 3);
 
+    String speedIn = String(speedInput);
+    speedInt = speedIn.toInt() + 1;
+
+    trainAddress = getAddress(input[5]);
+  }
+  if(dir)
+  {
+    dirSpeedByte = speedInt + 96;
+  }
+  else
+  {
+    dirSpeedByte = speedInt + 64;
+  }
+  
   assemble_dcc_msg();
 }
 
@@ -412,8 +383,7 @@ void headlights(char * input)
   msg[0].data[1] = 144;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 void buildAnyMessage(char * input)
@@ -431,8 +401,7 @@ void buildAnyMessage(char * input)
     j = j + 2;
   }
 
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 void hornOff(char * input)
@@ -441,8 +410,7 @@ void hornOff(char * input)
   msg[0].data[1] = 128;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 void soundHorn(char * input)
@@ -451,8 +419,7 @@ void soundHorn(char * input)
   msg[0].data[1] = 130;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
   delay(3000);
   hornOff(input);
 }
@@ -463,8 +430,7 @@ void bells(char * input)
   msg[0].data[1] = 136;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 void sendLightCmd(char * input)
@@ -479,8 +445,7 @@ void sendLightCmd(char * input)
   msg[0].data[1] = getLightByteTwo(iAddress, input[6]);
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
   msg[0].len = 3;
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 void altSendLightCmd(char * input)
@@ -496,8 +461,7 @@ void altSendLightCmd(char * input)
   msg[0].data[1] = lightByteTwo;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
   msg[0].len = 3;
-  oneTimeMsgReady = 1;
-  newMessage = 1;
+  sendOneTimeMessage();
 }
 
 //void altAltSendLightCmd(char * input)
@@ -520,7 +484,6 @@ void altSendLightCmd(char * input)
 //  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 //  msg[0].len = 3;
 //  oneTimeMsgReady = 1;
-//  newMessage = 1;
 //}
 
 void setup()
@@ -539,9 +502,8 @@ void loop()
   delay(200);
   while(Serial.available() > 0)
   {
-    String input = Serial.readString(); //accepts input in this pattern: {d ss t} - d is direction, 1 forward, 0 for backwards (d = 9 changes CV#29, d = 8 allows sending any message)
-    input.toCharArray(inputBuffer, sizeof(inputBuffer));    //ss is to numbers for speed, refer to list of vSteps above
-    //t is trainAddress. 1 is the green one.
+    String input = Serial.readString(); //Protocol: {D SS T}/{D S T} - D is direction, 1 forward, 0 for backwards + extra functions, see below
+    input.toCharArray(inputBuffer, sizeof(inputBuffer));    //S is for speed 0-14 //T is trainAddress. Refer to list at the top.
     if(inputBuffer[0] == 'f')//f A 
     {
       headlights(inputBuffer);
