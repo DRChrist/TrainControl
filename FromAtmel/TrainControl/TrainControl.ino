@@ -1,3 +1,5 @@
+#include "Message.h"
+
 #define DCC_PIN    4  // Arduino pin for DCC out
 
 //Timer frequency is 2MHz for ( /8 prescale from 16MHz )
@@ -63,24 +65,17 @@ unsigned char dir = 1; //forward
 unsigned char lightByteOne = 0;
 unsigned char lightByteTwo = 0;
 
-int jkp = 0;
 
-struct Message
-{
-  unsigned char data[7];
-  unsigned char len;
-};  
-
-#define MAXMSG  2
-// for the time being, use only two messages - the idle msg and the loco Speed msg
+#define MAXMSG  3
 
 struct Message idle = { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3};
 
 struct Message msg[MAXMSG] =
 {
-  { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3},  //idle msg
-  { {greenOneAddress, dirSpeedByte, 0, 0, 0, 0, 0}, 3}   //locoMsg with 128 speed steps
-};        // loco msg must be filled later with speed an XOR data byte
+  { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3},  //used for sending one time messages
+  { {greenOneAddress, dirSpeedByte, 0, 0, 0, 0, 0}, 3},    // loco msg must be filled later with speed an XOR data byte
+  { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3} //trying to send this one every other time, see if it fixes addressing bug
+};       
 
 
 int msgIndex = 1;
@@ -159,7 +154,6 @@ ISR(TIMER2_OVF_vect)
       //then advance to next state
       state = SENDBYTE;
       // goto next byte
-      jkp = 2;
       cbit = 0x80; // send this bit next time first. 0x80 == ( 1 0 0 0 0 0 0 0 )
       outbyte = msg[msgIndex].data[byteIndex];
       break;
@@ -176,17 +170,19 @@ ISR(TIMER2_OVF_vect)
       if(cbit == 0)
       { //last bit sent, is there a next byte?
         byteIndex++;
-        jkp = 2;
         if(byteIndex >= msg[msgIndex].len)
         {
           //this was already the XOR byte then advance to preamble
           state = PREAMBLE;
           preamble_count = 16;
-          jkp = 1;
-          if(msgIndex == 0)
+          if(msgIndex == 2)
           {
-            msgIndex++;
+            msgIndex = 1;
           }
+		  else
+		  {
+			msgIndex++;
+		  }
         }
         else
         {
@@ -243,38 +239,7 @@ void assemble_dcc_msg()
 }
 
 
-unsigned char getLightByteOne(int address)
-{
-  unsigned char adr = (char) address;
-  for(int i = 0; i < 28; i++)
-  {
-    for(int j = 0; j < 4; j++)
-    {
-      if(tableOfLights[i][j] == adr)
-      {
-        return tableOfLights[i][j + 1];
-      }
-    }
-  }
-  return '0';
-}
 
-unsigned char getLightByteTwo(int address, char colour)
-{
-  unsigned char adr = (char) address;
-  for(int i = 0; i < 28; i++)
-  {
-    for(int j = 0; j < 4; j++)
-    {
-      if(tableOfLights[i][j] == adr)
-      {
-        if(colour == 'r') return tableOfLights[i][j + 2];
-        if(colour == 'g') return tableOfLights[i][j + 3];
-      }
-    }
-  }
-  return '0';
-}
 
 void setLightBytes(int address, char colour)
 {
@@ -322,6 +287,22 @@ int getAddress(unsigned char adr)
     return 255; //to be changed later. Don't know what to set as default
   }
   
+}
+
+void setAddress(unsigned char adr) //alternative way to set address. May be more stable.
+{
+	if(adr == '1')
+	{
+		trainAddress = greenOneAddress;
+	}
+	else if(adr == '2')
+	{
+		trainAddress = redOneAddress;
+	}
+	else if(adr == '3')
+	{
+		trainAddress = yellowOneAddress;
+	}
 }
 
 void parseInput(char * input)
@@ -430,21 +411,6 @@ void sendLightCmd(char * input)
   address[2] = input[4];
   String sAddress = String(address);
   int iAddress = sAddress.toInt();
-  msg[0].data[0] = getLightByteOne(iAddress);
-  msg[0].data[1] = getLightByteTwo(iAddress, input[6]);
-  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
-  msg[0].len = 3;
-  sendOneTimeMessage();
-}
-
-void altSendLightCmd(char * input)
-{
-  char address[3];
-  address[0] = input[2];
-  address[1] = input[3];
-  address[2] = input[4];
-  String sAddress = String(address);
-  int iAddress = sAddress.toInt();
   setLightBytes(iAddress, input[6]);
   msg[0].data[0] = lightByteOne;
   msg[0].data[1] = lightByteTwo;
@@ -453,27 +419,50 @@ void altSendLightCmd(char * input)
   sendOneTimeMessage();
 }
 
-//void altAltSendLightCmd(char * input)
-//{
-//  char address[3];
-//  address[0] = input[2];
-//  address[1] = input[3];
-//  address[2] = input[4];
-//  String sAddress = String(address);
-//  int iAddress = sAddress.toInt();
-//  msg[0].data[0] = (iAddress / 4) + 1 + 128;½
-////  if(input[6] == 'r') This is not done. Check the docs to figure out how to write it
-////  {
-////    msg[0].data[1] = 128 + 64 + 32 + 16 + 8 +(iAddress % 4) - 1;
-////  }
-////  else
-////  {
-////    msg[0].data[1] = 128 + 64 + 32 + 16 + 8 +(iAddress % 4) - 1;
-//  }
-//  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
-//  msg[0].len = 3;
-//  oneTimeMsgReady = 1;
-//}
+void switchOffMsg(char byteOne, char byteTwo)
+{
+	msg[0].data[0] = byteOne;
+	msg[0].data[0] = byteTwo - 8;
+	sendOneTimeMessage();
+} 
+
+void sendSwitchCmd(char * input)
+{
+	int byteOne = 0;
+	int byteTwo = 0;
+	int register = 0;
+	int address = 0;
+	char addressArray[3];
+	addressArray[0] = input[2];
+	addressArray[1] = input[3];
+	addressArray[2] = input[4];
+	String sAddress = String(addressArray);
+	int iAddress = sAddress.toInt();
+	address = (iAddress/4) + 1;
+	
+	register = (iAddress%4) - 1;
+
+	byteOne = (address & 63) + 128;
+	msg[0].data[0] = byteOne;
+	
+	if(address & 64) byteTwo = byteTwo + 64;
+	if(address & 128) byteTwo = byteTwo + 128;
+	if(address & 256) byteTwo = byteTwo + 256;
+	byteTwo = byteTwo >> 2;
+	byteTwo = byteTwo + 128;
+	byteTwo = byteTwo + (register << 1);
+	byteTwo = byteTwo + 8; //'on' bit
+	if(input[6] == 's') byteTwo = byteTwo + 1; //output bit
+	
+	msg[0].data[1] = byteTwo;
+	msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+
+	sendOneTimeMessage();
+	delay(200);
+
+	switchOffMsg(byteOne, byteTwo);
+}
+
 
 void setup()
 {
@@ -517,17 +506,15 @@ void loop()
     {
       sendLightCmd(inputBuffer); //for changing lights. Protocol: {2 AAA C} AAA being the address of the light (see chart) and C being either 'r' or 'g' 
     }
-    else if(inputBuffer[0] == '3')
-    {
-      altSendLightCmd(inputBuffer);
-    }
+	else if(inputBuffer[0] == '3')
+	{
+		sendSwitchCmd(inputBuffer); //for changing swithces. Protocol: {3 AAA C} AAA is the address of the switch (see chart) C is 's' for straight (default is turn)
+	}
     else
     {
       parseInput(inputBuffer);
     }
-  }
-  //assemble_dcc_msg();
-  
+  }  
 }
 
 
