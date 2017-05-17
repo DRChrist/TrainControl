@@ -3,10 +3,10 @@
 #ifndef _MESSAGE_h
 #define _MESSAGE_h
 
-typedef struct Message
+struct Message
 {
-	unsigned char data[7];
-	unsigned char len;
+  unsigned char data[7];
+  unsigned char len;
 };
 
 #endif
