@@ -210,16 +210,19 @@ ISR(TIMER2_OVF_vect)
 
 int charsToInt(char * arr)
 {
-  int number = 0;
-  int multiplier = 1;
-  for(int i = sizeof(arr) - 1; i > -1; i--)
+//  int number = 0;
+  int res = 0;
+  Serial.println(sizeof(arr));
+  for(unsigned int i = 0; i < sizeof(arr); i++)
   {
-    int k = arr[i] - '0';
-    number = number + k * multiplier;
-    Serial.println(number);
-    multiplier = multiplier * 10;
+//    int k = arr[i] - '0';
+//    number = number + k * multiplier;
+//    Serial.println(number);
+//    multiplier = multiplier * 10;
+    res = res*10 + (arr[i] - '0');
+    Serial.println(res);
   }
-  return number;
+  return res;
 }
 
 void sendOneTimeMessage()
@@ -273,9 +276,6 @@ void assemble_dcc_msg()
   printMessage(msg[1]);
 }
 
-
-
-
 void setLightBytes(int address, char colour)
 {
 //  unsigned char adr = (char) address;
@@ -321,7 +321,6 @@ int getAddress(unsigned char adr)
   {
     return 255; //to be changed later. Don't know what to set as default
   }
-  
 }
 
 void setAddress(unsigned char adr) //alternative way to set address. May be more stable.
@@ -346,7 +345,6 @@ void setAddress(unsigned char adr) //alternative way to set address. May be more
 
 void parseInput(char * input)
 {
-//  int speedInt;
   int speedNumber = 0;
   
   if(input[0] == '9')
@@ -362,8 +360,8 @@ void parseInput(char * input)
   
   if(input[3] == ' ')//if there is only one digit in speed input
   {
-//    speedInt = input[2] - '0' + 1;  
-    speedNumber = input[2] - '0' + 1;
+    speedNumber = input[2] - '0' + 1;  
+//    speedNumber = input[2] - '0' + 1;
 //    trainAddress = getAddress(*(input + 4));
     setAddress(input[4]);
   }
@@ -373,12 +371,12 @@ void parseInput(char * input)
     speedInput[0] = *(input + 2);
     speedInput[1] = *(input + 3);
 
-    speedNumber = charsToInt(speedInput) + 1;
-//    String speedIn = String(speedInput);
-//    speedInt = speedIn.toInt() + 1;
+//    speedNumber = charsToInt(speedInput) + 1;
+    String speedIn = String(speedInput);
+    speedNumber = speedIn.toInt() + 1;
 
 //    trainAddress = getAddress(input[5]);
-    setAddress(input[5]);
+//    setAddress(input[5]);
   }
   if(dir)
   {
@@ -388,7 +386,7 @@ void parseInput(char * input)
   else
   {
 //    dirSpeedByte = speedInt + 64;
-    dirSpeedByte = speedNumber + 96;
+    dirSpeedByte = speedNumber + 64;
   }
   
   assemble_dcc_msg();
@@ -412,9 +410,9 @@ void buildAnyMessage(char * input)
     byteToBuild[0] = input[j + 2];
     byteToBuild[1] = input[j + 3];
     byteToBuild[2] = input[j + 4];
-//    String sByteToBuild = String(byteToBuild);
-//    int iByteToBuild = sByteToBuild.toInt();
-    int iByteToBuild = charsToInt(byteToBuild);
+    String sByteToBuild = String(byteToBuild);
+    int iByteToBuild = sByteToBuild.toInt();
+//    int iByteToBuild = charsToInt(byteToBuild);
     msg[0].data[i] = iByteToBuild;
     j = j + 2;
   }
@@ -486,11 +484,10 @@ void sendSwitchCmd(char * input)
   addressArray[0] = input[2];
   addressArray[1] = input[3];
   addressArray[2] = input[4];
-//  String sAddress = String(addressArray);
-//  int iAddress = sAddress.toInt();
-  int iAddress = charsToInt(addressArray);
+  String sAddress = String(addressArray);
+  int iAddress = sAddress.toInt();
+//  int iAddress = charsToInt(addressArray);
   address = (iAddress/4) + 1;
-
   reg = (iAddress%4);
   if(reg == 0)
   {
@@ -501,7 +498,6 @@ void sendSwitchCmd(char * input)
   {
     reg = reg - 1;
   }
-
   byteOne = (address & 63) + 128;
   msg[0].data[0] = byteOne;
   
@@ -530,6 +526,31 @@ void sendSwitchCmd(char * input)
 
   switchOffMsg(byteOne, byteTwo);
 }
+
+void setAllSignalsToGreen()
+{
+  for(int i = 0; i < 28; i++)
+  {
+    msg[0].data[0] = tableOfLights[i][1];
+    msg[0].data[1] = tableOfLights[i][2] + 1;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+    sendOneTimeMessage();
+    delay(100);
+  }
+}
+
+void setAllSignalsToRed()
+{
+  for(int i = 0; i < 28; i++)
+  {
+    msg[0].data[0] = tableOfLights[i][1];
+    msg[0].data[1] = tableOfLights[i][2];
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+    sendOneTimeMessage();
+    delay(100);
+  }
+}
+
 
 
 void setup()
@@ -577,6 +598,18 @@ void loop()
   else if(inputBuffer[0] == '3')
   {
     sendSwitchCmd(inputBuffer); //for changing swithces. Protocol: {3 AAA C} AAA is the address of the switch (see chart) C is 's' for straight (default is turn)
+  }
+  else if(inputBuffer[0] == 'g')
+  {
+    setAllSignalsToGreen();
+  }
+  else if(inputBuffer[0] == 'r')
+  {
+    setAllSignalsToRed();
+  }
+  else if(inputBuffer[0] == 't')
+  {
+    setAddress(inputBuffer[2]);
   }
     else
     {
