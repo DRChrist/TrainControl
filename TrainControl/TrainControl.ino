@@ -57,8 +57,11 @@ unsigned char cbit = 0x80;
 unsigned char greenOneAddress = 36; //this is the (fixed) address of the locomotive
 unsigned char redOneAddress = 40;
 unsigned char yellowOneAddress = 8;
+unsigned char redTwoAddress = 0; //placeholder
+unsigned char redTwoAddress = 0; //placeholder
 
 unsigned char trainAddress = 8;
+unsigned char trainAddress2 = 0; 
 unsigned char dirSpeedByte = 0;
 int dir = 0; //backwards
 
@@ -264,15 +267,32 @@ void printMessage(Message msg)
 
 void assemble_dcc_msg()
 {
-  unsigned char data, checksum;
+  msg[1].len = 3;
+  unsigned char data 
+  unsigned char checksum = 0;
   data = dirSpeedByte;
-  
-  checksum = msg[1].data[0] ^ data;
+  for(int i = 0; i < msg[1].len; i++)
+  {
+    checksum = checksum ^ msg[1].data[i];
+  }
+//  checksum = msg[1].data[0] ^ data;
+  if(msg[1].len == 3)
+  {
   noInterrupts(); //make sure that only matching parts of the message are used in ISR
   msg[1].data[0] = trainAddress;
   msg[1].data[1] = data;
   msg[1].data[2] = checksum;
   interrupts();
+  }
+  else
+  {
+    noInterrupts();
+    msg[1].data[0] = trainAddress;
+    msg[1].data[1] = trainAddress2;
+    msg[1].data[2] = data;
+    msg[1].data[3] = checksum;
+    interrupts();
+  }
   printMessage(msg[1]);
 }
 
@@ -299,29 +319,6 @@ void setLightBytes(int address, char colour)
   }
 }
 
-int getAddress(unsigned char adr)
-{
-  if(adr == '1')
-  {
-    return greenOneAddress;
-  }
-//  else if(adr == '0')//might send to every decoder on the track, which might be risky
-//  {
-//    return 0; //for resetting and clearing train memory, and for general broadcast
-//  }
-  else if(adr == '2')
-  {
-    return redOneAddress;
-  }
-  else if(adr == '3')
-  {
-    return yellowOneAddress;
-  }
-  else
-  {
-    return 255; //to be changed later. Don't know what to set as default
-  }
-}
 
 void setAddress(unsigned char adr) //alternative way to set address. May be more stable.
 {
@@ -336,6 +333,12 @@ void setAddress(unsigned char adr) //alternative way to set address. May be more
   else if(adr == '3')
   {
     trainAddress = yellowOneAddress;
+  }
+  else if(adr == '4')
+  {
+    trainAddress = redTwoAddress;
+    trainAddress2 = redTwoAdddress2;
+    msg[1].len = 4;
   }
   else
   {
@@ -361,7 +364,6 @@ void parseInput(char * input)
   if(input[3] == ' ')//if there is only one digit in speed input
   {
     speedNumber = input[2] - '0' + 1;  
-//    speedNumber = input[2] - '0' + 1;
 //    trainAddress = getAddress(*(input + 4));
     setAddress(input[4]);
   }
@@ -376,16 +378,14 @@ void parseInput(char * input)
     speedNumber = speedIn.toInt() + 1;
 
 //    trainAddress = getAddress(input[5]);
-//    setAddress(input[5]);
+    setAddress(input[5]);
   }
   if(dir)
   {
-//    dirSpeedByte = speedInt + 96;
      dirSpeedByte = speedNumber + 96;
   }
   else
   {
-//    dirSpeedByte = speedInt + 64;
     dirSpeedByte = speedNumber + 64;
   }
   
@@ -487,6 +487,7 @@ void sendSwitchCmd(char * input)
   String sAddress = String(addressArray);
   int iAddress = sAddress.toInt();
 //  int iAddress = charsToInt(addressArray);
+
   address = (iAddress/4) + 1;
   reg = (iAddress%4);
   if(reg == 0)
@@ -516,15 +517,43 @@ void sendSwitchCmd(char * input)
   byteTwo = byteTwo + 128;
   byteTwo = byteTwo + (reg << 1);
   byteTwo = byteTwo + 8; //'on' bit
-  if(input[6] == 's') byteTwo = byteTwo + 1; //output bit
+  if(input[6] == 's' || input[6] == 'l') byteTwo = byteTwo + 1; //output bit
   
   msg[0].data[1] = byteTwo;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
   sendOneTimeMessage();
-  delay(500);
+  delay(200);
 
   switchOffMsg(byteOne, byteTwo);
+  if(iAddress == 223 || iAddress == 231 || iAddress == 233)
+  {
+    tripleSwitchMsg(byteOne, byteTwo, input[6]);
+  }
+}
+
+void tripleSwitchMsg(char byteOne, char byteTwo, char input)
+{
+  if(input == 'l')//turn left
+  {
+    byteTwo = byteTwo + 1;
+    msg[0].data[0] = byteOne;
+    msg[0].data[1] = byteTwo;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+    sendOneTimeMessage();
+    delay(200);
+    switchOffMsg(byteOne, byteTwo);
+  }
+  else //turn right or run straight
+  {
+    byteTwo = byteTwo + 2;
+    msg[0].data[0] = byteOne;
+    msg[0].data[1] = byteTwo;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+    sendOneTimeMessage();
+    delay(200);
+    switchOffMsg(byteOne, byteTwo);
+  }
 }
 
 void setAllSignalsToGreen()
@@ -552,7 +581,6 @@ void setAllSignalsToRed()
 }
 
 
-
 void setup()
 {
   Serial.begin(115200);
@@ -571,7 +599,7 @@ void loop()
   {
     String input = Serial.readString(); //Protocol: {D SS T}/{D S T} - D is direction, 1 forward, 0 for backwards + extra functions, see below
     input.toCharArray(inputBuffer, sizeof(inputBuffer));    //S is for speed 0-14 //T is trainAddress. Refer to list at the top.
-    if(inputBuffer[0] == 'f')//f A 
+    if(inputBuffer[0] == 'f') 
     {
       headlights(inputBuffer);
     }
@@ -607,14 +635,10 @@ void loop()
   {
     setAllSignalsToRed();
   }
-  else if(inputBuffer[0] == 't')
+  else
   {
-    setAddress(inputBuffer[2]);
+    parseInput(inputBuffer);
   }
-    else
-    {
-      parseInput(inputBuffer);
-    }
   }  
 }
 
