@@ -58,7 +58,7 @@ unsigned char greenOneAddress = 36; //this is the (fixed) address of the locomot
 unsigned char redOneAddress = 40;
 unsigned char yellowOneAddress = 8;
 unsigned char redTwoAddress = 0; //placeholder
-unsigned char redTwoAddress = 0; //placeholder
+unsigned char redTwoAddress2 = 0; //placeholder
 
 unsigned char trainAddress = 8;
 unsigned char trainAddress2 = 0; 
@@ -211,22 +211,22 @@ ISR(TIMER2_OVF_vect)
   }
 }
 
-int charsToInt(char * arr)
-{
-//  int number = 0;
-  int res = 0;
-  Serial.println(sizeof(arr));
-  for(unsigned int i = 0; i < sizeof(arr); i++)
-  {
-//    int k = arr[i] - '0';
-//    number = number + k * multiplier;
-//    Serial.println(number);
-//    multiplier = multiplier * 10;
-    res = res*10 + (arr[i] - '0');
-    Serial.println(res);
-  }
-  return res;
-}
+//int charsToInt(char * arr)
+//{
+////  int number = 0;
+//  int res = 0;
+//  Serial.println(sizeof(arr));
+//  for(unsigned int i = 0; i < sizeof(arr); i++)
+//  {
+////    int k = arr[i] - '0';
+////    number = number + k * multiplier;
+////    Serial.println(number);
+////    multiplier = multiplier * 10;
+//    res = res*10 + (arr[i] - '0');
+//    Serial.println(res);
+//  }
+//  return res;
+//}
 
 void sendOneTimeMessage()
 {
@@ -268,7 +268,7 @@ void printMessage(Message msg)
 void assemble_dcc_msg()
 {
   msg[1].len = 3;
-  unsigned char data 
+  unsigned char data;
   unsigned char checksum = 0;
   data = dirSpeedByte;
   for(int i = 0; i < msg[1].len; i++)
@@ -337,7 +337,7 @@ void setAddress(unsigned char adr) //alternative way to set address. May be more
   else if(adr == '4')
   {
     trainAddress = redTwoAddress;
-    trainAddress2 = redTwoAdddress2;
+    trainAddress2 = redTwoAddress2;
     msg[1].len = 4;
   }
   else
@@ -374,8 +374,9 @@ void parseInput(char * input)
     speedInput[1] = *(input + 3);
 
 //    speedNumber = charsToInt(speedInput) + 1;
-    String speedIn = String(speedInput);
-    speedNumber = speedIn.toInt() + 1;
+    speedNumber = atoi(speedInput);
+//    String speedIn = String(speedInput);
+//    speedNumber = speedIn.toInt() + 1;
 
 //    trainAddress = getAddress(input[5]);
     setAddress(input[5]);
@@ -394,7 +395,8 @@ void parseInput(char * input)
 
 void headlights(char * input) 
 {
-  msg[0].data[0] = getAddress(input[2]);
+  setAddress(input[2]);
+  msg[0].data[0] = trainAddress;
   msg[0].data[1] = 144;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
@@ -410,8 +412,9 @@ void buildAnyMessage(char * input)
     byteToBuild[0] = input[j + 2];
     byteToBuild[1] = input[j + 3];
     byteToBuild[2] = input[j + 4];
-    String sByteToBuild = String(byteToBuild);
-    int iByteToBuild = sByteToBuild.toInt();
+//    String sByteToBuild = String(byteToBuild);
+//    int iByteToBuild = sByteToBuild.toInt();
+    int iByteToBuild = atoi(byteToBuild);
 //    int iByteToBuild = charsToInt(byteToBuild);
     msg[0].data[i] = iByteToBuild;
     j = j + 2;
@@ -422,7 +425,8 @@ void buildAnyMessage(char * input)
 
 void hornOff(char * input)
 {
-  msg[0].data[0] = getAddress(input[2]);
+  setAddress(input[2]);
+  msg[0].data[0] = trainAddress;
   msg[0].data[1] = 128;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
@@ -431,7 +435,8 @@ void hornOff(char * input)
 
 void soundHorn(char * input)
 {
-  msg[0].data[0] = getAddress(input[2]);
+  setAddress(input[2]);
+  msg[0].data[0] = trainAddress;
   msg[0].data[1] = 130;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
@@ -442,7 +447,8 @@ void soundHorn(char * input)
 
 void bells(char * input)
 {
-  msg[0].data[0] = getAddress(input[2]);
+  setAddress(input[2]);
+  msg[0].data[0] = trainAddress;
   msg[0].data[1] = 136;
   msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
 
@@ -455,8 +461,9 @@ void sendLightCmd(char * input)
   address[0] = input[2];
   address[1] = input[3];
   address[2] = input[4];
-  String sAddress = String(address);
-  int iAddress = sAddress.toInt();
+//  String sAddress = String(address);
+//  int iAddress = sAddress.toInt();
+  int iAddress = atoi(address);
 //  int iAddress = charsToInt(address);
   setLightBytes(iAddress, input[6]);
   msg[0].data[0] = lightByteOne;
@@ -484,8 +491,9 @@ void sendSwitchCmd(char * input)
   addressArray[0] = input[2];
   addressArray[1] = input[3];
   addressArray[2] = input[4];
-  String sAddress = String(addressArray);
-  int iAddress = sAddress.toInt();
+//  String sAddress = String(addressArray);
+//  int iAddress = sAddress.toInt();
+  int iAddress = atoi(addressArray);
 //  int iAddress = charsToInt(addressArray);
 
   address = (iAddress/4) + 1;
@@ -623,22 +631,22 @@ void loop()
     {
       sendLightCmd(inputBuffer); //for changing lights. Protocol: {2 AAA C} AAA being the address of the light (see chart) and C being either 'r' or 'g' 
     }
-  else if(inputBuffer[0] == '3')
-  {
-    sendSwitchCmd(inputBuffer); //for changing swithces. Protocol: {3 AAA C} AAA is the address of the switch (see chart) C is 's' for straight (default is turn)
-  }
-  else if(inputBuffer[0] == 'g')
-  {
-    setAllSignalsToGreen();
-  }
-  else if(inputBuffer[0] == 'r')
-  {
-    setAllSignalsToRed();
-  }
-  else
-  {
-    parseInput(inputBuffer);
-  }
+    else if(inputBuffer[0] == '3')
+    {
+      sendSwitchCmd(inputBuffer); //for changing swithces. Protocol: {3 AAA C} AAA is the address of the switch (see chart) C is 's' for straight (default is turn)
+    }
+    else if(inputBuffer[0] == 'g')
+    {
+      setAllSignalsToGreen();
+    }
+    else if(inputBuffer[0] == 'r')
+    {
+      setAllSignalsToRed();
+    }
+    else
+    {
+      parseInput(inputBuffer);
+    }
   }  
 }
 
