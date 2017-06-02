@@ -57,8 +57,8 @@ unsigned char cbit = 0x80;
 unsigned char greenOneAddress = 36; //this is the (fixed) address of the locomotive
 unsigned char redOneAddress = 40;
 unsigned char yellowOneAddress = 8;
-unsigned char redTwoAddress = 10; //placeholder
-unsigned char redTwoAddress2 = 47; //placeholder
+unsigned char redTwoAddress = 196; //placeholder
+unsigned char redTwoAddress2 = 116; //placeholder
 
 unsigned char trainAddress = 8;
 unsigned char trainAddress2 = 0; 
@@ -77,7 +77,7 @@ struct Message msg[MAXMSG] =
 {
   { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3},  //used for sending one time messages
   { {greenOneAddress, dirSpeedByte, 0, 0, 0, 0, 0}, 3},    // loco msg must be filled later with speed an XOR data byte
-  { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3} //trying to send this one every other time, see if it fixes addressing bug
+  { {0xFF, 0, 0xFF, 0, 0, 0, 0}, 3}
 };       
 
 
@@ -185,6 +185,7 @@ ISR(TIMER2_OVF_vect)
       else
       {
       msgIndex++;
+      //msg[0] = idle; //intended for calculating checksum, probably a bad way to do it
       }
         }
         else
@@ -308,22 +309,26 @@ void setAddress(unsigned char adr)
   {
     trainAddress = greenOneAddress;
     msg[1].len = 3;
+    msg[0].len = 3;
   }
   else if(adr == '2')
   {
     trainAddress = redOneAddress;
     msg[1].len = 3;
+    msg[0].len = 3;
   }
   else if(adr == '3')
   {
     trainAddress = yellowOneAddress;
     msg[1].len = 3;
+    msg[0].len = 3;
   }
   else if(adr == '4')
   {
     trainAddress = redTwoAddress;
     trainAddress2 = redTwoAddress2;
     msg[1].len = 4;
+    msg[0].len = 4;  
   }
   else
   {
