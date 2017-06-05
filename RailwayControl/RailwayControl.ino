@@ -380,10 +380,20 @@ void sendLocoMsg(char * input)
 void headlights(char * input) 
 {
   setAddress(input[2]);
-  msg[0].data[0] = trainAddress;
-  msg[0].data[1] = 144;
-  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
-
+  if(msg[0].len == 3)
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = 144;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+  }
+  else
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = trainAddress2;
+    msg[0].data[2] = 144;
+    msg[0].data[3] = msg[0].data[0] ^ msg[0].data[1] ^ msg[0].data[2];
+  }
+  
   sendOneTimeMessage();
 }
 
@@ -409,9 +419,19 @@ void buildAnyMessage(char * input)
 void hornOff(char * input)
 {
   setAddress(input[2]);
-  msg[0].data[0] = trainAddress;
-  msg[0].data[1] = 128;
-  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+  if(msg[0].len == 3)
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = 128;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+  }
+  else
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = trainAddress2;
+    msg[0].data[2] = 128;
+    msg[0].data[3] = msg[0].data[0] ^ msg[0].data[1] ^ msg[0].data[2];   
+  }
 
   sendOneTimeMessage();
 }
@@ -419,10 +439,20 @@ void hornOff(char * input)
 void soundHorn(char * input)
 {
   setAddress(input[2]);
-  msg[0].data[0] = trainAddress;
-  msg[0].data[1] = 130;
-  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
-
+  if(msg[0].len == 3)
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = 130;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+  }
+  else
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = trainAddress2;
+    msg[0].data[2] = 130;
+    msg[0].data[3] = msg[0].data[0] ^ msg[0].data[1] ^ msg[0].data[2];
+  }
+  
   sendOneTimeMessage();
   delay(3000);
   hornOff(input);
@@ -431,10 +461,19 @@ void soundHorn(char * input)
 void bells(char * input)
 {
   setAddress(input[2]);
-  msg[0].data[0] = trainAddress;
-  msg[0].data[1] = 136;
-  msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
-
+  if(msg[0].len == 3)
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = 136;
+    msg[0].data[2] = msg[0].data[0] ^ msg[0].data[1];
+  }
+  else
+  {
+    msg[0].data[0] = trainAddress;
+    msg[0].data[1] = trainAddress2;
+    msg[0].data[2] = 136;
+    msg[0].data[3] = msg[0].data[0] ^ msg[0].data[1] ^ msg[0].data[2];
+  }
   sendOneTimeMessage();
 }
 
